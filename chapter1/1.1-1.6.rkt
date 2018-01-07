@@ -106,8 +106,17 @@
 ; {(n,2n+1,n^2) | n in N}
 ; ------------------------------------------------------------------------------
 ; Exercise 1.3
+; Find a set T of natural numbers such that 0 ∈ T
+; and whenever n ∈ T, then n + 3 ∈ T, but T ≠ S,
+; where S is the set defined in definition 1.1.2.
 ;
 ; T = N
+; My explanation:
+; S is the "smallest set" satisfys the two condition.
+; Without "smallest" condition, adding any natural number into S makes a new set T
+; and T ≠ S
+; if and only if 1 and 2, then S
+; if 1 and 2, then T
 ; ------------------------------------------------------------------------------
 ; Exercise 1.4
 ;
