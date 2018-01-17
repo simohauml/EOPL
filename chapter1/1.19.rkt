@@ -13,3 +13,7 @@
   (lambda (n)
     (eopl:error 'list-set
                 "List too short by ~s elements.~%" (+ n 1))))
+
+;; test
+(list-set '(a b c d) 2 '(1 2))
+(list-ref (list-set '(a b c d) 3 '(1 5 10)) 3)

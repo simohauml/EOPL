@@ -20,3 +20,6 @@
       ((< (car loi1) (car loi2)) (cons (car loi1) (merge (cdr loi1) loi2)))
       (else
        (cons (car loi2) (merge loi1 (cdr loi2)))))))
+
+;; test
+(sort '(8 2 5 2 3))

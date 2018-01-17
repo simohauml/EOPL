@@ -27,3 +27,8 @@
           ((eqv? s1 sexp) s2)
           ((eqv? s2 sexp) s1)
           (else sexp))))
+
+;; test
+(swapper 'a 'd '(a b c d))
+(swapper 'a 'd '(a d () c d))
+(swapper 'x 'y '((x) y (z (x))))

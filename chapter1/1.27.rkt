@@ -20,3 +20,9 @@
                        (flatten-onto (car slist)
                                      (flatten-onto (cdr slist) tail)))))))
       (flatten-onto slist '()))))
+
+;; test
+(flatten '(a b c))
+(flatten '((a) () (b ()) () (c)))
+(flatten '((a b) c (((d)) e)))
+(flatten '(a b (() (c))))

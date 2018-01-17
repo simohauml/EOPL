@@ -25,3 +25,8 @@
 ;    (if (symbol? sexp)
 ;        (if (eqv? s sexp) 1 0)
 ;        (count-occurrences s sexp))))
+
+;; test
+(count-occurrences 'x '((f x) y (((x z) x))))
+(count-occurrences 'x '((f x) y (((x z) () x))))
+(count-occurrences 'w '((f x) y (((x z) x))))
