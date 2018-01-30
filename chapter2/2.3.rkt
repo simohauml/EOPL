@@ -1,6 +1,10 @@
 #lang eopl
 ; ------------------------------------------------------------------------------                       
 ; Exercise 2.3
+; 1) If r is a representation of some number, (diff r (diff q q)) for any
+;    diff-tree q is a representation of the same number.
+;
+; 2) The solution below includes a few helper functions:
 
 (define zero (lambda () '(diff (one) (one))))
 ;(define is-zero?

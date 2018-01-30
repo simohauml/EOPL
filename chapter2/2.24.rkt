@@ -18,3 +18,5 @@
                            (bintree-to-list right))))))
                 
 
+;; test
+(bintree-to-list (interior-node 'a (leaf-node 3) (leaf-node 4)))

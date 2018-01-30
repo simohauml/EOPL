@@ -25,5 +25,6 @@
                (list
                 (unparse-lc-exp rator) (unparse-lc-exp rand))))))
 
-
+;; test
 (define exp1 (lambda-exp 'a (app-exp (var-exp 'a) (var-exp 'b))))
+(equal? (unparse-lc-exp exp1) '(lambda (a) (a b)))

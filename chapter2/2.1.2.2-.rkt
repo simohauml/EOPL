@@ -2,7 +2,7 @@
 
 ; ------------------------------------------------------------------------------
 ; Exercise 2.1
-(define N 16)
+(define N 2)
 (define zero (lambda () '()))
 (define is-zero? (lambda (n) (null? n)))
 (define successor
@@ -47,6 +47,18 @@
         (if (is-zero? (predecessor n))
             n
             (times-bigit n (fact-bigit (predecessor n)))))))
+
+(define make
+  (lambda (n)
+    (if (zero? n)
+        '()
+        (if (odd? n)
+            (successor (make (- n 1)))
+            (times-bigit (make (/ n 2)) '(2))))))
+
+;; test
+(factorial 10)
+(fact-bigit '(10))
 
 ; ------------------------------------------------------------------------------
 ; Exercise 2.2

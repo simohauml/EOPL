@@ -86,3 +86,8 @@
   (lambda (vars vals)
     (eopl:error 'extend-env* "Length of ~s and ~s are not equal" vars vals)))
 
+;; test
+(define e (extend-env* '(a b c d e)
+                       '(1 2 3 4 5)
+                       (empty-env)))
+

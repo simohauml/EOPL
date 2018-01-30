@@ -49,7 +49,7 @@
         (eopl:error "unknow cmd on stack"))))))
 
 (define push
-  (lambda (saved-stack var)
+  (lambda (var saved-stack)
     (lambda (cmd)
       (cond
        ((eqv? cmd 'top) var)
@@ -65,6 +65,14 @@
   (lambda (stack)
     (stack 'top)))
 
+;; test
+(define s (push 'a
+                (push 'b
+                      (push 'c
+                            (empty-stack)))))
+
+(equal? (top s) 'a)
+(equal? (top (pop s)) 'b)
 
 ;----------------------------------------------------
 ; A variant using a triple of functions.

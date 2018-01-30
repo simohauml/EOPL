@@ -40,3 +40,10 @@
   (lambda (datum message-suffix)
       (eopl:error 'parse-expression
                   (string-append "Syntax error: ~s is " message-suffix) datum)))
+
+;; test
+(parse-expression '(a b c))
+(parse-expression '(lambda))
+
+;; '(a b c) might not be syntax error. consider syntax: app-exp (rator rands)
+;; a is the operator, b and c are oprands

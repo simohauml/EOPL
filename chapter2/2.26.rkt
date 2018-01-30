@@ -29,7 +29,7 @@
         (a-red-blue-tree (root)
           (loop root 0))))))
 
-
+;; test
 (define subtree (red-node
                 (red-node (leaf-node 0)
                           (leaf-node 0))
@@ -40,3 +40,4 @@
                                  (leaf-node 0))))))
 
 (define tree (a-red-blue-tree subtree))
+(mark-leaves-with-red-depth tree)

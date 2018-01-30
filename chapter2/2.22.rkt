@@ -40,3 +40,11 @@
 (define report-empty-stack
   (lambda (func)
     (eopl:error func "The stack is empty")))
+
+;; test
+(define s1 (push 'a
+                 (push 'b
+                       (push 'c
+                             (empty-stack)))))
+
+(equal? (top s1) 'a)

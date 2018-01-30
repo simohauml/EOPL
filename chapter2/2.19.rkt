@@ -45,3 +45,8 @@
 
 (define right-bintree
   (lambda (bintree) (caddr bintree)))
+
+;; test
+(define t (make-bintree 3
+                        (number->bintree 2)
+                        (number->bintree 4)))

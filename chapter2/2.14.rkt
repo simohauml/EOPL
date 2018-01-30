@@ -38,3 +38,11 @@
 (define report-no-binding-found
   (lambda (search-var)
     (eopl:error 'apply-env "No binding for ~s" search-var)))
+
+;; test
+(define e (extend-env 'a 1
+                      (extend-env 'b 2
+                                  (extend-env 'c 3
+                                              (empty-env)))))
+
+(equal? (has-binding? e 'b) #t)

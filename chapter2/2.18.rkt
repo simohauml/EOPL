@@ -101,3 +101,8 @@
 (define report-moving-too-far
   (lambda (func)
     (eopl:error func "Moved too far")))
+
+;; test
+(define s1 (number->sequence 3))
+(define s2 (insert-to-left 1 s1))
+(define s3 (insert-to-right 5 s2))

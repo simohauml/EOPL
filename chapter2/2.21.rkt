@@ -35,3 +35,11 @@
 (define report-invalid-env
   (lambda (env)
     (eopl:error 'apply-env "Bad environment: ~s" env)))
+
+;; test
+(define e1 (extend-env 'a 1
+                       (extend-env 'b 2
+                                   (extend-env 'c 3
+                                               (empty-env)))))
+
+(equal? (has-binding? e1 'a) #t)

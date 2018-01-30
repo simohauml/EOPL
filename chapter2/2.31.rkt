@@ -9,7 +9,8 @@
 
 (define parse-prefix
   (lambda (datum)
-    (if (prefix-exp? (car datum)) (car datum)
+    (if (prefix-exp? (car datum))
+        (car datum)
         (parse-prefix (rematch-prefix (match-prefix datum))))))
 
 (define match-prefix
@@ -52,5 +53,6 @@
       (eopl:error parse-prefix
                   (string-append "Syntax error: ~s is " message-suffix) datum)))
 
-
+;; test
 (define cal '(- - 3 2 - 4 - 12 7))
+(parse-prefix cal)

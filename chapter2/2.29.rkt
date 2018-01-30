@@ -4,11 +4,11 @@
   (var-exp
    (var identifier?))
   (lambda-exp
-   (bound-var (list-of identifier?))
+   (bound-vars (list-of identifier?))
    (body lc-exp?))
   (app-exp
    (rator lc-exp?)
-   (rand (list-of lc-exp?))))
+   (rands (list-of lc-exp?))))
 
 (define identifier?
   (lambda (x)
@@ -23,10 +23,14 @@
                (lambda-exp (cadr datum)
                            (parse-expression (caddr datum)))
                (app-exp (parse-expression (car datum))
-                        (parse-expression (cadr datum)))))
+                        (map parse-expression (cdr datum)))))
           (else
            (report-invalid-concrete-syntax datum)))))
 
 (define report-invalid-concrete-syntax
   (lambda (datum)
     (eopl:error 'parse-expression "Syntax error: ~s" datum)))
+
+
+;; test
+(parse-expression '(lambda (x) (x y)))
