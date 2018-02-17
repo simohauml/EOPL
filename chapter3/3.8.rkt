@@ -16,7 +16,7 @@
     (expression ("+" "(" expression "," expression ")") addi-exp)
     (expression ("*" "(" expression "," expression ")") mult-exp)
     (expression ("/" "(" expression "," expression ")") quot-exp)
-    (expression ("equall?" "(" expression "," expression ")") equal-exp)
+    (expression ("equal?" "(" expression "," expression ")") equal-exp)
     (expression ("greater?" "(" expression "," expression ")") greater-exp)
     (expression ("less?" "(" expression "," expression ")") less-exp)
     (expression ("zero?" "(" expression ")") zero?-exp)
@@ -202,3 +202,7 @@
                  (let ((val (value-of exp env)))
                    (let ((num (expval->num val)))
                      (num-val (- num))))))))
+
+;; test
+(run "equal?(1, 1)")
+(run "greater?(1, 1)")

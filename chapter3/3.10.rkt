@@ -1,7 +1,47 @@
 #lang eopl
+
+; ------------------------------------------------------------------------------
+; Environments
+; Exercise 2.21
+(define-datatype env env?
+  (empty-env)
+  (extend-env
+   (saved-var symbol?)
+   (saved-val scheme-value?)
+   (saved-env env?)))
+
+(define apply-env
+  (lambda (e search-var)
+    (cases env e
+      (empty-env () (report-no-binding-found search-var))
+      (extend-env (s-var s-val s-env)
+                  (if (eqv? search-var s-var)
+                      s-val
+                      (apply-env s-env search-var))))))
+
+(define has-binding?
+  (lambda (initial-env search-var)
+    (cases env initial-env
+      (empty-env () #f)
+      (extend-env (s-var s-val s-env)
+                  (if (eqv? search-var s-var)
+                      #t
+                      (has-binding? s-env search-var))))))
+
+(define scheme-value? (lambda (s) #t))
+
+
+(define report-no-binding-found
+  (lambda (search-var)
+    (eopl:error 'apply-env "No binding for ~s" search-var)))
+
+(define report-invalid-env
+  (lambda (env)
+    (eopl:error 'apply-env "Bad environment: ~s" env)))
+
+
 ; ------------------------------------------------------------------------------
 ; Scanner and parser specification
-
 (define scanner-spec
   '((whitespace (whitespace) skip)
     (comment ("%" (arbno (not #\newline))) skip)
@@ -33,7 +73,6 @@
 
 (sllgen:make-define-datatypes scanner-spec grammar)
 
-; ------------------------------------------------------------------------------
 ; Debugging helpers for scanner and parser
 
 (define list-the-datatypes
@@ -46,7 +85,7 @@
 (define scan&parse
   (sllgen:make-string-parser scanner-spec grammar))
 
-
+; ------------------------------------------------------------------------------
 ; Expression datatype
 (define-datatype expval expval?
   (num-val
@@ -122,59 +161,7 @@
   (lambda (val)
     (eopl:error 'expval->car "List ~s is empty" val)))
 
-; ------------------------------------------------------------------------------
-; Environments
-; Exercise 2.21
-(define-datatype env env?
-  (empty-env)
-  (extend-env
-   (saved-var symbol?)
-   (saved-val scheme-value?)
-   (saved-env env?)))
-
-(define apply-env
-  (lambda (e search-var)
-    (cases env e
-      (empty-env () (report-no-binding-found search-var))
-      (extend-env (s-var s-val s-env)
-                  (if (eqv? search-var s-var)
-                      s-val
-                      (apply-env s-env search-var))))))
-
-(define has-binding?
-  (lambda (initial-env search-var)
-    (cases env initial-env
-      (empty-env () #f)
-      (extend-env (s-var s-val s-env)
-                  (if (eqv? search-var s-var)
-                      #t
-                      (has-binding? s-env search-var))))))
-
-(define scheme-value? (lambda (s) #t))
-
-
-(define report-no-binding-found
-  (lambda (search-var)
-    (eopl:error 'apply-env "No binding for ~s" search-var)))
-
-(define report-invalid-env
-  (lambda (env)
-    (eopl:error 'apply-env "Bad environment: ~s" env)))
-
-;init-env : () → Env
-;usage: (init-env) = [i=1,v=5,x=10]
-(define init-env
-  (lambda ()
-    (extend-env
-     'i (num-val 1)
-     (extend-env
-      'v (num-val 5)
-      (extend-env
-       'x (num-val 10)
-       (empty-env))))))
-
 ;================================================================
-
 ;run : String → ExpVal
 (define run
   (lambda (string)
@@ -277,3 +264,20 @@
                  (expval->cdr val1)))
       (list-exp (exps)
                 (list-val (map (lambda (expr) (value-of expr env)) exps))))))
+
+; ------------------------------------------------------------------------------
+;init-env : () → Env
+;usage: (init-env) = [i=1,v=5,x=10]
+(define init-env
+  (lambda ()
+    (extend-env
+     'i (num-val 1)
+     (extend-env
+      'v (num-val 5)
+      (extend-env
+       'x (num-val 10)
+       (empty-env))))))
+
+;; test
+(run "let x = 4
+      in list(x, -(x,1), -(x,3))")

@@ -181,3 +181,6 @@
                  (let ((val (value-of exp env)))
                    (let ((num (expval->num val)))
                      (num-val (- num))))))))
+
+;; test
+(run "minus(-(minus(5),9))")

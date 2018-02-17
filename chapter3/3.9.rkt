@@ -1,115 +1,4 @@
 #lang eopl
-; ------------------------------------------------------------------------------
-; Scanner and parser specification
-
-(define scanner-spec
-  '((whitespace (whitespace) skip)
-    (comment ("%" (arbno (not #\newline))) skip)
-    (number (digit (arbno digit)) number)
-    (number ("-" digit (arbno digit)) number)
-    (identifier (letter (arbno (or letter digit "_" "-" "?"))) symbol)))
-
-(define grammar
-  '((program (expression) a-program)
-    (expression (number) const-exp)
-    (expression ("-" "(" expression "," expression ")") diff-exp)
-    (expression ("+" "(" expression "," expression ")") addi-exp)
-    (expression ("*" "(" expression "," expression ")") mult-exp)
-    (expression ("/" "(" expression "," expression ")") quot-exp)
-    (expression ("equal?" "(" expression "," expression ")") equal-exp)
-    (expression ("greater?" "(" expression "," expression ")") greater-exp)
-    (expression ("less?" "(" expression "," expression ")") less-exp)
-    (expression ("zero?" "(" expression ")") zero?-exp)
-    (expression ("if" expression "then" expression "else" expression) if-exp)
-    (expression (identifier) var-exp)
-    (expression ("let" identifier "=" expression "in" expression) let-exp)
-    (expression ("minus" "(" expression ")") minus-exp)
-    (expression ("emptylist") emptylist-exp)
-    (expression ("null?" expression) nulllist?-exp)
-    (expression ("cons" "(" expression "," expression ")") cons-exp)
-    (expression ("car" "(" expression ")") car-exp)
-    (expression ("cdr" "(" expression ")") cdr-exp)))
-
-(sllgen:make-define-datatypes scanner-spec grammar)
-
-; ------------------------------------------------------------------------------
-; Debugging helpers for scanner and parser
-
-(define list-the-datatypes
-  (lambda()
-    (sllgen:list-define-datatypes scanner-spec grammar)))
-
-(define just-scan
-  (sllgen:make-string-scanner scanner-spec grammar))
-
-(define scan&parse
-  (sllgen:make-string-parser scanner-spec grammar))
-
-
-; Expression datatype
-(define-datatype expval expval?
-  (num-val
-   (num number?))
-  (bool-val
-   (bool boolean?))
-  (emptylist-val)
-  (cons-val
-   (first expval?)
-   (rest expval?)))
-
-;expval->num : ExpVal → Int
-(define expval->num
-  (lambda (val)
-    (cases expval val
-      (num-val (num) num)
-      (else (report-expval-extractor-error 'num val)))))
-
-;expval->bool : ExpVal → Bool
-(define expval->bool
-  (lambda (val)
-    (cases expval val
-      (bool-val (bool) bool)
-      (else
-       (report-expval-extractor-error 'bool val)))))
-
-;expval->bool : ExpVal → Bool
-(define expval->list
-  (lambda (val)
-    (cases expval val
-      (emptylist-val () '())
-      (cons-val (first rest)
-                (list first (expval->list rest)))
-      (else
-       (report-expval-extractor-error 'list val)))))
-
-(define expval->emptylist?
-  (lambda (val)
-    (cases expval val
-      (emptylist-val () #t)
-      (cons-val (first rest) #f)
-      (else (report-expval-extractor-error 'cons-or-emptylist val)))))
-
-(define expval->car
-  (lambda (val)
-    (cases expval val
-      (emptylist-val () (report-expval-EmptyList-error val))
-      (cons-val (first rest) first)
-      (else (report-expval-extractor-error 'cons-or-emptylist val)))))
-
-(define expval->cdr
-  (lambda (val)
-    (cases expval val
-      (emptylist-val () (report-expval-EmptyList-error val))
-      (cons-val (first rest) rest)
-      (else (report-expval-extractor-error 'cons-or-emptylist val)))))
-
-(define report-expval-extractor-error
-  (lambda (expected val)
-    (eopl:error 'expval-extractor "Expected a ~s, got ~s" expected val)))
-
-(define report-expval-EmptyList-error
-  (lambda (val)
-    (eopl:error 'expval->car "List ~s is empty" val)))
 
 ; ------------------------------------------------------------------------------
 ; Environments
@@ -150,17 +39,116 @@
   (lambda (env)
     (eopl:error 'apply-env "Bad environment: ~s" env)))
 
-;init-env : () → Env
-;usage: (init-env) = [i=1,v=5,x=10]
-(define init-env
-  (lambda ()
-    (extend-env
-     'i (num-val 1)
-     (extend-env
-      'v (num-val 5)
-      (extend-env
-       'x (num-val 10)
-       (empty-env))))))
+; ------------------------------------------------------------------------------
+; Scanner and parser specification
+
+(define scanner-spec
+  '((whitespace (whitespace) skip)
+    (comment ("%" (arbno (not #\newline))) skip)
+    (number (digit (arbno digit)) number)
+    (number ("-" digit (arbno digit)) number)
+    (identifier (letter (arbno (or letter digit "_" "-" "?"))) symbol)))
+
+(define grammar
+  '((program (expression) a-program)
+    (expression (number) const-exp)
+    (expression ("-" "(" expression "," expression ")") diff-exp)
+    (expression ("+" "(" expression "," expression ")") addi-exp)
+    (expression ("*" "(" expression "," expression ")") mult-exp)
+    (expression ("/" "(" expression "," expression ")") quot-exp)
+    (expression ("equal?" "(" expression "," expression ")") equal-exp)
+    (expression ("greater?" "(" expression "," expression ")") greater-exp)
+    (expression ("less?" "(" expression "," expression ")") less-exp)
+    (expression ("zero?" "(" expression ")") zero?-exp)
+    (expression ("if" expression "then" expression "else" expression) if-exp)
+    (expression (identifier) var-exp)
+    (expression ("let" identifier "=" expression "in" expression) let-exp)
+    (expression ("minus" "(" expression ")") minus-exp)
+    (expression ("emptylist") emptylist-exp)
+    (expression ("null?" expression) nulllist?-exp)
+    (expression ("cons" "(" expression "," expression ")") cons-exp)
+    (expression ("car" "(" expression ")") car-exp)
+    (expression ("cdr" "(" expression ")") cdr-exp)))
+
+(sllgen:make-define-datatypes scanner-spec grammar)
+
+; Debugging helpers for scanner and parser
+
+(define list-the-datatypes
+  (lambda()
+    (sllgen:list-define-datatypes scanner-spec grammar)))
+
+(define just-scan
+  (sllgen:make-string-scanner scanner-spec grammar))
+
+(define scan&parse
+  (sllgen:make-string-parser scanner-spec grammar))
+
+; ------------------------------------------------------------------------------
+; Expression datatype
+(define-datatype expval expval?
+  (num-val
+   (num number?))
+  (bool-val
+   (bool boolean?))
+  (emptylist-val)
+  (cons-val
+   (first expval?)
+   (rest expval?)))
+
+;expval->num : ExpVal → Int
+(define expval->num
+  (lambda (val)
+    (cases expval val
+      (num-val (num) num)
+      (else (report-expval-extractor-error 'num val)))))
+
+;expval->bool : ExpVal → Bool
+(define expval->bool
+  (lambda (val)
+    (cases expval val
+      (bool-val (bool) bool)
+      (else
+       (report-expval-extractor-error 'bool val)))))
+
+;expval->bool : ExpVal → List
+(define expval->list
+  (lambda (val)
+    (cases expval val
+      (emptylist-val () '())
+      (cons-val (first rest)
+                (list first (expval->list rest)))
+      (else
+       (report-expval-extractor-error 'list val)))))
+
+(define expval->emptylist?
+  (lambda (val)
+    (cases expval val
+      (emptylist-val () #t)
+      (cons-val (first rest) #f)
+      (else (report-expval-extractor-error 'cons-or-emptylist val)))))
+
+(define expval->car
+  (lambda (val)
+    (cases expval val
+      (emptylist-val () (report-expval-EmptyList-error val))
+      (cons-val (first rest) first)
+      (else (report-expval-extractor-error 'cons-or-emptylist val)))))
+
+(define expval->cdr
+  (lambda (val)
+    (cases expval val
+      (emptylist-val () (report-expval-EmptyList-error val))
+      (cons-val (first rest) rest)
+      (else (report-expval-extractor-error 'cons-or-emptylist val)))))
+
+(define report-expval-extractor-error
+  (lambda (expected val)
+    (eopl:error 'expval-extractor "Expected a ~s, got ~s" expected val)))
+
+(define report-expval-EmptyList-error
+  (lambda (val)
+    (eopl:error 'expval->car "List ~s is empty" val)))
 
 ;================================================================
 
@@ -210,19 +198,19 @@
                     (num-val
                      (/ num1 num2)))))
       (equal-exp (exp1 exp2)
-                (let ((val1 (value-of exp1 env))
-                      (val2 (value-of exp2 env)))
-                  (let ((num1 (expval->num val1))
-                        (num2 (expval->num val2)))
-                    (bool-val
-                     (= num1 num2)))))
+                 (let ((val1 (value-of exp1 env))
+                       (val2 (value-of exp2 env)))
+                   (let ((num1 (expval->num val1))
+                         (num2 (expval->num val2)))
+                     (bool-val
+                      (= num1 num2)))))
       (greater-exp (exp1 exp2)
-                (let ((val1 (value-of exp1 env))
-                      (val2 (value-of exp2 env)))
-                  (let ((num1 (expval->num val1))
-                        (num2 (expval->num val2)))
-                    (bool-val
-                     (> num1 num2)))))
+                   (let ((val1 (value-of exp1 env))
+                         (val2 (value-of exp2 env)))
+                     (let ((num1 (expval->num val1))
+                           (num2 (expval->num val2)))
+                       (bool-val
+                        (> num1 num2)))))
       (less-exp (exp1 exp2)
                 (let ((val1 (value-of exp1 env))
                       (val2 (value-of exp2 env)))
@@ -251,9 +239,9 @@
                      (num-val (- num)))))
       (emptylist-exp () (emptylist-val))
       (nulllist?-exp (exp)
-                 (let ((val1 (value-of exp env)))
-                         (let ((bool1 (expval->emptylist? val1)))
-                           (bool-val bool1))))
+                     (let ((val1 (value-of exp env)))
+                       (let ((bool1 (expval->emptylist? val1)))
+                         (bool-val bool1))))
       (cons-exp (exp1 exp2)
                 (let ((val1 (value-of exp1 env))
                       (val2 (value-of exp2 env)))
@@ -264,3 +252,24 @@
       (cdr-exp (exp)
                (let ((val1 (value-of exp env)))
                  (expval->cdr val1))))))
+
+; ------------------------------------------------------------------------------
+;init-env : () → Env
+;usage: (init-env) = [i=1,v=5,x=10]
+(define init-env
+  (lambda ()
+    (extend-env
+     'i (num-val 1)
+     (extend-env
+      'v (num-val 5)
+      (extend-env
+       'x (num-val 10)
+       (empty-env))))))
+
+;; test
+(run
+ "let x = 4
+    in cons(x,
+            cons(cons(-(x,1),
+                 emptylist),
+            emptylist))")
