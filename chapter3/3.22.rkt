@@ -1,63 +1,25 @@
 #lang eopl
-; ------------------------------------------------------------------------------
-; Environments
 
-; See: exercise 2.5 and 2.10
+(require "environment.rkt")
 
 ; Approximation.
 (define environment? list?)
 
-(define empty-env
-  (lambda () '()))
+;; change syntax of built-in operations to the same with user define procedures
+; ------------------------------------------------------------------------------
 
-(define extend-env
-  (lambda (var val env)
-    (cons (cons var val) env)))
 
-(define extend-env*
-  (lambda (vars vals env)
-    (cond ((and (null? vars) (null? vals))
-           env)
-          ((and (pair? vars) (pair? vals))
-           (extend-env* (cdr vars)
-                               (cdr vals)
-                               (extend-env (car vars) (car vals) env)))
-          ((null? vars)
-           (report-too-few-variables))
-          (else
-           (report-too-few-values)))))
+; ------------------------------------------------------------------------------
+; Exercise 3.19
 
-(define report-too-few-variables
-  (lambda ()
-    (eopl:error 'extend-env* "Too few variables")))
-
-(define report-too-few-values
-  (lambda ()
-    (eopl:error 'extend-env* "Too few values")))
-
-(define apply-env
-  (lambda (initial-env search-var)
-    (letrec ((loop (lambda (env)
-                     (cond ((null? env)
-                            (report-no-binding-found search-var initial-env))
-                           ((and (pair? env) (pair? (car env)))
-                            (let ((saved-var (caar env))
-                                  (saved-val (cdar env))
-                                  (saved-env (cdr env)))
-                              (if (eqv? search-var saved-var)
-                                  saved-val
-                                  (loop saved-env))))
-                           (else
-                            (report-invalid-env initial-env))))))
-      (loop initial-env))))
-
-(define report-no-binding-found
-  (lambda (search-var env)
-    (eopl:error 'apply-env "No binding for ~s in ~s" search-var env)))
-
-(define report-invalid-env
-  (lambda (env)
-    (eopl:error 'apply-env "Bad environment ~s" env)))
+; See: exercise 3.18
+; Note that we do not *replace* proc by letproc, but add the latter.
+;
+; Expression ::= letproc Identifier (Identifier) = Expression in Expression
+;                (letproc-exp (name var proc-body exp-body)
+;
+; (value-of (letproc-exp name var proc-body exp-body) rho)
+; = (value-of exp-body [name=(proc-val (procedure var proc-body rho))] rho)
 
 ; ------------------------------------------------------------------------------
 ; Scanner and parser specification
@@ -89,9 +51,9 @@
     (expression ("let"(arbno identifier "=" expression) "in" expression) let-exp)
     (expression ("let*"(arbno identifier "=" expression) "in" expression) let*-exp)
     (expression ("unpack" (arbno identifier) "=" expression "in" expression) unpack-exp)
-    (expression ("proc" "(" identifier ")" expression) proc-exp)
-    (expression ("letproc" identifier "(" identifier ")" "=" expression "in" expression) letproc-exp)
-    (expression ("(" expression expression ")") call-exp)))
+    (expression ("proc" "(" (arbno identifier) ")" expression) proc-exp)
+    (expression ("letproc" identifier "(" (arbno identifier) ")" "=" expression "in" expression) letproc-exp)
+    (expression ("(" expression (arbno expression) ")") call-exp)))
 
 (sllgen:make-define-datatypes scanner-spec grammar)
 
@@ -113,15 +75,15 @@
 
 (define-datatype proc proc?
   (procedure
-   (var identifier?)
+   (var (list-of identifier?))
    (body expression?)
    (saved-env? environment?)))
 
 (define apply-procedure
-  (lambda (proc1 val)
+  (lambda (proc1 vals)
     (cases proc proc1
-      (procedure (var body saved-env)
-        (value-of body (extend-env var val saved-env))))))
+      (procedure (vars body saved-env)
+                 (value-of body (extend-env* vars vals saved-env))))))
 
 ; ------------------------------------------------------------------------------
 ; Expressed values
@@ -201,24 +163,24 @@
   (lambda (val)
     (cases expval val
       (num-val (num)
-        num)
+               num)
       (bool-val (bool)
-        bool)
+                bool)
       (emptylist-val ()
-        '())
+                     '())
       (cons-val (first rest)
-        (cons (expval->sexp first) (expval->sexp rest)))
+                (cons (expval->sexp first) (expval->sexp rest)))
       (proc-val (proc1)
-         "<<procedure>>"))))
+                "<<procedure>>"))))
 
 ; ------------------------------------------------------------------------------
 ; Init environment
 (define init-env
   (lambda ()
     (extend-env 'i (num-val 1)
-      (extend-env 'v (num-val 5)
-        (extend-env 'x (num-val 10)
-          (empty-env))))))
+                (extend-env 'v (num-val 5)
+                            (extend-env 'x (num-val 10)
+                                        (empty-env))))))
 
 ; ------------------------------------------------------------------------------
 ; Interpreter
@@ -231,50 +193,62 @@
   (lambda (pgm)
     (cases program pgm
       (a-program (exp1)
-        (value-of exp1 (init-env))))))
+                 (value-of exp1 (init-env))))))
 
 (define value-of
   (lambda (exp env)
     (cases expression exp
       (const-exp (num) (num-val num))
       (nullary-exp (op)
-        ((nullary-table op)))
+                   ((nullary-table op)))
       (unary-exp (op exp1)
-        (let ((val1 (value-of exp1 env)))
-          ((unary-table op) val1)))
+                 (let ((val1 (value-of exp1 env)))
+                   ((unary-table op) val1)))
       (binary-exp (op exp1 exp2)
-        (let ((val1 (value-of exp1 env))
-              (val2 (value-of exp2 env)))
-          ((binary-table op) val1 val2)))
+                  (let ((val1 (value-of exp1 env))
+                        (val2 (value-of exp2 env)))
+                    ((binary-table op) val1 val2)))
       (n-ary-exp (op exprs)
-        (let ((vals (map (lambda (expr) (value-of expr env)) exprs)))
-          ((n-ary-table op) vals)))
+                 (let ((vals (map (lambda (expr) (value-of expr env)) exprs)))
+                   ((n-ary-table op) vals)))
       (if-exp (exp1 exp2 exp3)
-        (let ((val1 (value-of exp1 env)))
-          (if (expval->bool val1)
-              (value-of exp2 env)
-              (value-of exp3 env))))
+              (let ((val1 (value-of exp1 env)))
+                (if (expval->bool val1)
+                    (value-of exp2 env)
+                    (value-of exp3 env))))
       (cond-exp (lhss rhss)
-        (value-of-cond lhss rhss env))
+                (value-of-cond lhss rhss env))
       (var-exp (var)
-        (apply-env env var))
+               (apply-env env var))
       (let-exp (vars exprs body)
-        (let ((vals (map (lambda (expr) (value-of expr env)) exprs)))
-          (value-of body (extend-env* vars vals env))))
+               (let ((vals (map (lambda (expr) (value-of expr env)) exprs)))
+                 (value-of body (extend-env* vars vals env))))
       (let*-exp (vars exprs body)
-        (value-of body (foldl-2 extend-with-value-of env vars exprs)))
+                (value-of body (foldl-2 extend-with-value-of env vars exprs)))
       (unpack-exp (vars expr body)
-        (let ((val (value-of expr env)))
-          (value-of body (extend-env* vars (expval->list val) env))))
-      (proc-exp (var body)
-        (proc-val (procedure var body env)))
-      (letproc-exp (name var proc-body exp-body)
-        (let ((p-val (proc-val (procedure var proc-body env))))
-          (value-of exp-body (extend-env name p-val env))))
-      (call-exp (rator rand)
-        (let ((proc (expval->proc (value-of rator env)))
-              (arg (value-of rand env)))
-          (apply-procedure proc arg))))))
+                  (let ((val (value-of expr env)))
+                    (value-of body (extend-env* vars (expval->list val) env))))
+      (proc-exp (vars body)
+                (proc-val (procedure vars body env)))
+      (letproc-exp (name vars proc-body exp-body)
+                   (let ((p-val (proc-val (procedure vars proc-body env))))
+                     (value-of exp-body (extend-env name p-val env))))
+      (call-exp (rator rands)
+                (let ((proc (expval->proc (value-of rator env)))
+                      (args (value-of* rands env)))
+                  (apply-procedure proc args))))))
+
+(define value-of*
+  (lambda (exps env)
+    (letrec ((value-of*-helper (lambda (exps env init)
+                                 (cond
+                                   ((null? exps) init)
+                                   (else
+                                    (value-of*-helper (cdr exps)
+                                                      env
+                                                      (cons (value-of (car exps) env)
+                                                            init)))))))
+      (value-of*-helper exps env empty))))
 
 (define value-of-cond
   (lambda (lhss rhss env)
@@ -376,14 +350,17 @@
 
 (define read-eval-print
   (sllgen:make-rep-loop "-->" value-of-program
-    (sllgen:make-stream-parser scanner-spec grammar)))
+                        (sllgen:make-stream-parser scanner-spec grammar)))
 
 ;; test
-(run "let f = proc (x) proc (y) +(y, +(x, 1))
-      in ((f 3) 4)")
+(run "(proc (x y) +(x, y)
+       3 4)")
 
-(run "let f = proc (x) -(x,11)
-      in (f (f 77))")
-
-(run "(proc (f) (f (f 77))
-       proc (x) -(x,11))")
+;(run "let f = proc (x) proc (y) +(y, +(x, 1))
+;      in ((f 3) 4)")
+;
+;(run "let f = proc (x) -(x,11)
+;      in (f (f 77))")
+;
+;(run "(proc (f) (f (f 77))
+;       proc (x) -(x,11))")

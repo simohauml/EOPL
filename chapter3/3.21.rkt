@@ -60,6 +60,18 @@
     (eopl:error 'apply-env "Bad environment ~s" env)))
 
 ; ------------------------------------------------------------------------------
+; Exercise 3.19
+
+; See: exercise 3.18
+; Note that we do not *replace* proc by letproc, but add the latter.
+;
+; Expression ::= letproc Identifier (Identifier) = Expression in Expression
+;                (letproc-exp (name var proc-body exp-body)
+;
+; (value-of (letproc-exp name var proc-body exp-body) rho)
+; = (value-of exp-body [name=(proc-val (procedure var proc-body rho))] rho)
+
+; ------------------------------------------------------------------------------
 ; Scanner and parser specification
 
 (define scanner-spec
@@ -89,9 +101,9 @@
     (expression ("let"(arbno identifier "=" expression) "in" expression) let-exp)
     (expression ("let*"(arbno identifier "=" expression) "in" expression) let*-exp)
     (expression ("unpack" (arbno identifier) "=" expression "in" expression) unpack-exp)
-    (expression ("proc" "(" identifier ")" expression) proc-exp)
-    (expression ("letproc" identifier "(" identifier ")" "=" expression "in" expression) letproc-exp)
-    (expression ("(" expression expression ")") call-exp)))
+    (expression ("proc" "(" (arbno identifier) ")" expression) proc-exp)
+    (expression ("letproc" identifier "(" (arbno identifier) ")" "=" expression "in" expression) letproc-exp)
+    (expression ("(" expression (arbno expression) ")") call-exp)))
 
 (sllgen:make-define-datatypes scanner-spec grammar)
 
@@ -113,15 +125,15 @@
 
 (define-datatype proc proc?
   (procedure
-   (var identifier?)
+   (var (list-of identifier?))
    (body expression?)
    (saved-env? environment?)))
 
 (define apply-procedure
-  (lambda (proc1 val)
+  (lambda (proc1 vals)
     (cases proc proc1
-      (procedure (var body saved-env)
-        (value-of body (extend-env var val saved-env))))))
+      (procedure (vars body saved-env)
+        (value-of body (extend-env* vars vals saved-env))))))
 
 ; ------------------------------------------------------------------------------
 ; Expressed values
@@ -266,15 +278,27 @@
       (unpack-exp (vars expr body)
         (let ((val (value-of expr env)))
           (value-of body (extend-env* vars (expval->list val) env))))
-      (proc-exp (var body)
-        (proc-val (procedure var body env)))
-      (letproc-exp (name var proc-body exp-body)
-        (let ((p-val (proc-val (procedure var proc-body env))))
+      (proc-exp (vars body)
+        (proc-val (procedure vars body env)))
+      (letproc-exp (name vars proc-body exp-body)
+        (let ((p-val (proc-val (procedure vars proc-body env))))
           (value-of exp-body (extend-env name p-val env))))
-      (call-exp (rator rand)
+      (call-exp (rator rands)
         (let ((proc (expval->proc (value-of rator env)))
-              (arg (value-of rand env)))
-          (apply-procedure proc arg))))))
+              (args (value-of* rands env)))
+          (apply-procedure proc args))))))
+
+(define value-of*
+  (lambda (exps env)
+    (letrec ((value-of*-helper (lambda (exps env init)
+                              (cond
+                                ((null? exps) init)
+                                (else
+                                 (value-of*-helper (cdr exps)
+                                                   env
+                                                   (cons (value-of (car exps) env)
+                                                         init)))))))
+      (value-of*-helper exps env empty))))
 
 (define value-of-cond
   (lambda (lhss rhss env)
@@ -379,6 +403,9 @@
     (sllgen:make-stream-parser scanner-spec grammar)))
 
 ;; test
+(run "(proc (x y) +(x, y)
+       3 4)")
+
 (run "let f = proc (x) proc (y) +(y, +(x, 1))
       in ((f 3) 4)")
 
