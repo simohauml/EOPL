@@ -1,55 +1,20 @@
 #lang eopl
+
+;; Exercise 3.36
+;; Same with 3.35, because it uses a solustion supporting mutually recursive already
+
+; ------------------------------------------------------------------------------
+; Helper functions
+(define build-list
+  (lambda (num proc)
+    (letrec ((helper (lambda (i num proc)
+                       (cond
+                         ((= i num) '())
+                         (else (cons (proc i) (helper (+ i 1) num proc)))))))
+      (helper 0 num proc))))
+
 ; ------------------------------------------------------------------------------
 ; Environments
-
-; See: exercise 2.5 and 2.10
-
-; Approximation.
-(define environment? list?)
-
-(define empty-env
-  (lambda () '()))
-
-(define extend-env
-  (lambda (var val env)
-    (cons (cons var val) env)))
-
-(define extend-env*
-  (lambda (vars vals env)
-    (cond ((and (null? vars) (null? vals))
-           env)
-          ((and (pair? vars) (pair? vals))
-           (extend-env* (cdr vars)
-                               (cdr vals)
-                               (extend-env (car vars) (car vals) env)))
-          ((null? vars)
-           (report-too-few-variables))
-          (else
-           (report-too-few-values)))))
-
-(define report-too-few-variables
-  (lambda ()
-    (eopl:error 'extend-env* "Too few variables")))
-
-(define report-too-few-values
-  (lambda ()
-    (eopl:error 'extend-env* "Too few values")))
-
-(define apply-env
-  (lambda (initial-env search-var)
-    (letrec ((loop (lambda (env)
-                     (cond ((null? env)
-                            (report-no-binding-found search-var initial-env))
-                           ((and (pair? env) (pair? (car env)))
-                            (let ((saved-var (caar env))
-                                  (saved-val (cdar env))
-                                  (saved-env (cdr env)))
-                              (if (eqv? search-var saved-var)
-                                  saved-val
-                                  (loop saved-env))))
-                           (else
-                            (report-invalid-env initial-env))))))
-      (loop initial-env))))
 
 (define report-no-binding-found
   (lambda (search-var env)
@@ -58,6 +23,65 @@
 (define report-invalid-env
   (lambda (env)
     (eopl:error 'apply-env "Bad environment ~s" env)))
+
+(define-datatype environment environment?
+  (empty-env)
+  (extend-env
+   (var identifier?)
+   (val expval?)
+   (env environment?))
+  (extend-env*
+   (vars (list-of identifier?))
+   (vals (list-of expval?))
+   (env environment?)))
+
+(define extend-env-rec*
+  (lambda (p-names b-vars bodys saved-env)
+    (let ((vecs (build-list (length p-names) (lambda (x) (vector-val (make-vector 1))))))
+      (let ((new-env (extend-env* p-names vecs saved-env)))
+        (map (lambda (vars body vec)
+               (vector-set! (expval->vector vec) 0
+                            (proc-val (procedure vars body new-env))))
+             b-vars
+             bodys
+             vecs)
+        new-env))))
+
+(define apply-env
+  (lambda (env search-var)
+    (cases environment env
+      (empty-env ()
+                 (report-no-binding-found search-var env))
+      (extend-env (saved-var saved-val saved-env)
+                  (if (eqv? saved-var search-var) saved-val
+                      (apply-env saved-env search-var)))
+      (extend-env* (saved-vars saved-vals saved-env)
+                   (letrec ((loop
+                             (lambda (vars vals env)
+                               (cond
+                                 ((null? vars)
+                                  (apply-env env search-var))
+                                 ((equal? (car vars) search-var)
+                                  (let ((result (car vals)))
+                                    (cases expval result
+                                      (vector-val (vec) (vector-ref (expval->vector result) 0))
+                                      (else result))))
+                                 (else (loop (cdr vars)
+                                             (cdr vals)
+                                             env))))))
+                     (loop saved-vars saved-vals saved-env))))))
+
+
+(define get-proc
+  (lambda (search-name pnames pvars pbodys)
+    (cond
+      ((null? pnames) '())
+      ((eqv? search-name (car pnames))
+       (list (car pvars) (car pbodys)))
+      (else (get-proc search-name
+                      (cdr pnames)
+                      (cdr pvars)
+                      (cdr pbodys))))))
 
 ; ------------------------------------------------------------------------------
 ; Exercise 3.19
@@ -98,8 +122,8 @@
     (expression ("if" expression "then" expression "else" expression) if-exp)
     (expression ("cond" (arbno expression "==>" expression) "end") cond-exp)
     (expression (identifier) var-exp)
-    (expression ("let" identifier "=" expression "in" expression) let-exp)
-    (expression ("let*"(arbno identifier "=" expression) "in" expression) let*-exp)
+    (expression ("let"(arbno identifier "=" expression) "in" expression) let-exp)
+    (expression ("letrec" (arbno identifier "(" (separated-list identifier ",") ")" "=" expression) "in" expression) letrec-exp)
     (expression ("unpack" (arbno identifier) "=" expression "in" expression) unpack-exp)
     (expression ("proc" "(" (arbno identifier) ")" expression) proc-exp)
     (expression ("letproc" identifier "(" (arbno identifier) ")" "=" expression "in" expression) letproc-exp)
@@ -125,7 +149,7 @@
 
 (define-datatype proc proc?
   (procedure
-   (var (list-of identifier?))
+   (vars (list-of identifier?))
    (body expression?)
    (saved-env? environment?)))
 
@@ -133,8 +157,7 @@
   (lambda (proc1 vals)
     (cases proc proc1
       (procedure (vars body saved-env)
-        (value-of body (extend-env* vars vals saved-env))))))
-
+                 (value-of body (extend-env* vars vals saved-env)))))) 
 ; ------------------------------------------------------------------------------
 ; Expressed values
 
@@ -146,7 +169,8 @@
   (bool-val (bool boolean?))
   (emptylist-val)
   (cons-val (first expval?) (rest expval?))
-  (proc-val (proc proc?)))
+  (proc-val (proc proc?))
+  (vector-val (vec vector?)))
 
 (define expval->num
   (lambda (val)
@@ -179,6 +203,11 @@
       (cons-val (first rest) #f)
       (else (report-expval-extractor-error 'cons-or-emptylist val)))))
 
+(define expval->vector
+  (lambda (val)
+    (cases expval val
+      (vector-val (vec) vec)
+      (else (report-expval-extractor-error 'vector val)))))
 ; No 'foldr' in #lang eopl, use a specialized version for 1 list.
 (define foldr-1
   (lambda (func init lst)
@@ -194,7 +223,7 @@
   (lambda (val)
     (cases expval val
       (proc-val (proc1) proc1)
-      (else (report-expval-extractor-error 'procedure val)))))
+      (else (report-expval-extractor-error 'procedure* val)))))
 
 (define report-expval-extractor-error
   (lambda (expected val)
@@ -213,24 +242,26 @@
   (lambda (val)
     (cases expval val
       (num-val (num)
-        num)
+               num)
       (bool-val (bool)
-        bool)
+                bool)
       (emptylist-val ()
-        '())
+                     '())
       (cons-val (first rest)
-        (cons (expval->sexp first) (expval->sexp rest)))
+                (cons (expval->sexp first) (expval->sexp rest)))
       (proc-val (proc1)
-         "<<procedure>>"))))
+                "<<procedure*>>")
+      (vector-val (vector1)
+                  vector1))))
 
 ; ------------------------------------------------------------------------------
 ; Init environment
 (define init-env
   (lambda ()
     (extend-env 'i (num-val 1)
-      (extend-env 'v (num-val 5)
-        (extend-env 'x (num-val 10)
-          (empty-env))))))
+                (extend-env 'v (num-val 5)
+                            (extend-env 'x (num-val 10)
+                                        (empty-env))))))
 
 ; ------------------------------------------------------------------------------
 ; Interpreter
@@ -243,62 +274,62 @@
   (lambda (pgm)
     (cases program pgm
       (a-program (exp1)
-        (value-of exp1 (init-env))))))
+                 (value-of exp1 (init-env))))))
 
 (define value-of
   (lambda (exp env)
     (cases expression exp
       (const-exp (num) (num-val num))
       (nullary-exp (op)
-        ((nullary-table op)))
+                   ((nullary-table op)))
       (unary-exp (op exp1)
-        (let ((val1 (value-of exp1 env)))
-          ((unary-table op) val1)))
+                 (let ((val1 (value-of exp1 env)))
+                   ((unary-table op) val1)))
       (binary-exp (op exp1 exp2)
-        (let ((val1 (value-of exp1 env))
-              (val2 (value-of exp2 env)))
-          ((binary-table op) val1 val2)))
+                  (let ((val1 (value-of exp1 env))
+                        (val2 (value-of exp2 env)))
+                    ((binary-table op) val1 val2)))
       (n-ary-exp (op exprs)
-        (let ((vals (map (lambda (expr) (value-of expr env)) exprs)))
-          ((n-ary-table op) vals)))
+                 (let ((vals (map (lambda (expr) (value-of expr env)) exprs)))
+                   ((n-ary-table op) vals)))
       (if-exp (exp1 exp2 exp3)
-        (let ((val1 (value-of exp1 env)))
-          (if (expval->bool val1)
-              (value-of exp2 env)
-              (value-of exp3 env))))
+              (let ((val1 (value-of exp1 env)))
+                (if (expval->bool val1)
+                    (value-of exp2 env)
+                    (value-of exp3 env))))
       (cond-exp (lhss rhss)
-        (value-of-cond lhss rhss env))
+                (value-of-cond lhss rhss env))
       (var-exp (var)
-        (apply-env env var))
-      (let-exp (var exp1 body)
-        (let ((val1 (value-of exp1 env)))
-          (value-of body (extend-env var val1 env))))
-      (let*-exp (vars exprs body)
-        (value-of body (foldl-2 extend-with-value-of env vars exprs)))
+               (apply-env env var))
+      (let-exp (vars exprs body)
+               (value-of body (foldl-2 extend-with-value-of env vars exprs)))
+      (letrec-exp (p-names lb-vars p-bodys letrec-body)
+                  (value-of letrec-body (extend-env-rec* p-names lb-vars p-bodys env)))
       (unpack-exp (vars expr body)
-        (let ((val (value-of expr env)))
-          (value-of body (extend-env* vars (expval->list val) env))))
+                  (let ((val (value-of expr env)))
+                    (value-of body (extend-env vars (expval->list val) env))))
       (proc-exp (vars body)
-        (proc-val (procedure vars body env)))
+                (proc-val (procedure vars body env)))
       (letproc-exp (name vars proc-body exp-body)
-        (let ((p-val (proc-val (procedure vars proc-body env))))
-          (value-of exp-body (extend-env name p-val env))))
+                   (let ((p-val (proc-val (procedure vars proc-body env))))
+                     (value-of exp-body (extend-env name p-val env))))
       (call-exp (rator rands)
-        (let ((proc (expval->proc (value-of rator env)))
-              (args (value-of* rands env)))
-          (apply-procedure proc args))))))
+                (let ((proc (expval->proc (value-of rator env)))
+                      (args (value-of* rands env)))
+                  (apply-procedure proc args))))))
 
 (define value-of*
   (lambda (exps env)
-    (letrec ((value-of*-helper (lambda (exps env init)
-                              (cond
-                                ((null? exps) init)
-                                (else
-                                 (value-of*-helper (cdr exps)
-                                                   env
-                                                   (cons (value-of (car exps) env)
-                                                         init)))))))
-      (value-of*-helper exps env empty))))
+    (letrec ((value-of*-helper
+              (lambda (exps env init)
+                (cond
+                  ((null? exps) init)
+                  (else
+                   (value-of*-helper (cdr exps)
+                                     env
+                                     (cons (value-of (car exps) env)
+                                           init)))))))
+      (reverse (value-of*-helper exps env empty)))))
 
 (define value-of-cond
   (lambda (lhss rhss env)
@@ -400,81 +431,53 @@
 
 (define read-eval-print
   (sllgen:make-rep-loop "-->" value-of-program
-    (sllgen:make-stream-parser scanner-spec grammar)))
+                        (sllgen:make-stream-parser scanner-spec grammar)))
 
-;; test
-;(run "let makemult = proc (maker)
-;                      proc (x)
-;                       if zero?(x)
-;                       then 0
-;                       else -(((maker maker) -(x,1)), -4)
-;      in let times4 = proc (x) ((makemult makemult) x)
-;         in (times4 3)")
-;
-;(run "let makemult = proc (maker)
-;                      proc (x)
-;                       if zero?(x)
-;                       then 0
-;                       else +(((maker maker) -(x,1)), 4)
-;      in let times4 = proc (x) ((makemult makemult) x)
-;         in (times4 3)")
-;
-;(run "let makemult = proc (maker)
-;                      proc (x)
-;                       if zero?(x)
-;                       then 0
-;                       else -(((maker maker) -(x,1)), minus(x))
-;      in let times4 = proc (x) ((makemult makemult) x)
-;         in (times4 4)")
-
-;(run "let makemult = proc (maker)
-;                      proc (y)
-;                       proc (x)
-;                        if zero?(x)
-;                        then 0
-;                        else +((((maker maker) y) -(x,1)), y)
-;      in let times = proc (x y) (((makemult makemult) y) x)
-;         in let frac = proc (f)
-;                        proc (n)
-;                         if zero?(n)
-;                         then 1
-;                         else (times n ((f f) -(n,1)))
-;              in ((frac frac) 4)")
-
-;(run "let odd-iter = proc (od)
-;                      proc (ev)
-;                       proc (x)
-;                        if zero?(x)
-;                        then 0
-;                        else (((ev ev) od) -(x,1))
-;      in let even-iter = proc (ev)
-;                          proc (od)
-;                           proc (x)
-;                            if zero?(x)
-;                            then 1
-;                            else (((od od) ev) -(x,1))
-;         in let odd = proc (n) (((odd-iter odd-iter) even-iter) n)
-;           in let even = proc (n) (((even-iter even-iter) odd-iter) n)
-;             in (odd 3)")
-
-;(run "let makerec = proc (f)
-;                     let d = proc (x)
-;                              proc (z) ((f (x x)) z)
-;                     in proc (n) ((f (d d)) n)
-;        in let maketimes4 = proc (f) proc (x)
-;                            if zero?(x)
-;                            then 0
-;                            else -((f -(x,1)), -4)
-;          in let times4 = (makerec maketimes4) in (times4 3)")
-
-;(run "(proc (x y) +(x, y)
-;       3 4)")
-;
-;(run "let f = proc (x) proc (y) +(y, +(x, 1))
-;      in ((f 3) 4)")
-;
 ;(run "let f = proc (x) -(x,11)
 ;      in (f (f 77))")
 ;
-(run "(proc (f) (f (f 77))
-       proc (x) -(x,11))")
+;(run "(proc (f) (f (f 77))
+;       proc (x) -(x,11))")
+;
+;(run "let a = 1
+;          b = 3
+;      in +(a,b)")
+;
+;(run "let a = 1
+;          b = +(3,a)
+;      in +(a,b)")
+;
+;(run "letproc f(a b) = +(a,b)
+;      in (f 2 3)")
+;
+;;(run "letrec double(x) = if zero?(x)
+;;                         then 0
+;;                         else -((double -(x,1)), -2)
+;;      in (double 6)")
+;
+;(run "letrec multi(x,n) = if zero?(x)
+;                           then 0
+;                           else -((multi -(x,1) n), minus(n))
+;      in (multi 6 3)")
+
+;(run "letrec time(x, y)
+;             = if zero?(x) then 0 else -((time -(x,1)  y), -(0, y))
+;      in (time 3 2)")
+
+(run "letrec
+          even(x) = if zero?(x) then 1 else (odd -(x,1))
+          odd(x) = if zero?(x) then 0 else (even -(x,1))
+      in (odd 13)")
+
+(run "letrec
+      one(x, y) = if zero?(x) then 1 else (two -(x, 1) y)
+      two(x, y) = if zero?(y) then 0 else (one x -(y, 1))
+       in (two 5 4)")
+
+(run "letrec
+      func(x) =
+       if zero?(x) then
+          1
+      else
+         -((func -(x, 1)), -(0, x))
+      in (func 10)")

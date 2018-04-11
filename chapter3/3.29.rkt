@@ -1,4 +1,6 @@
 #lang eopl
+
+(require racket/list)
 ; ------------------------------------------------------------------------------
 ; Environments
 
@@ -20,8 +22,8 @@
            env)
           ((and (pair? vars) (pair? vals))
            (extend-env* (cdr vars)
-                               (cdr vals)
-                               (extend-env (car vars) (car vals) env)))
+                        (cdr vals)
+                        (extend-env (car vars) (car vals) env)))
           ((null? vars)
            (report-too-few-variables))
           (else
@@ -102,6 +104,7 @@
     (expression ("let*"(arbno identifier "=" expression) "in" expression) let*-exp)
     (expression ("unpack" (arbno identifier) "=" expression "in" expression) unpack-exp)
     (expression ("proc" "(" (arbno identifier) ")" expression) proc-exp)
+    (expression ("traceproc" "(" (arbno identifier) ")" expression) traceproc-exp)
     (expression ("letproc" identifier "(" (arbno identifier) ")" "=" expression "in" expression) letproc-exp)
     (expression ("(" expression (arbno expression) ")") call-exp)))
 
@@ -123,17 +126,44 @@
 ; ------------------------------------------------------------------------------
 ; Representing procedures as data structures
 
+;(define-datatype proc proc?
+;  (procedure
+;   (var (list-of identifier?))
+;   (body expression?)
+;   (saved-env? environment?)
+;   (trace? boolean?)))
+;
+;(define apply-procedure
+;  (lambda (proc1 vals)
+;    (cases proc proc1
+;      (procedure (vars body saved-env trace?)
+;                 (let ((value (value-of body (extend-env* vars vals saved-env))))
+;                   (if trace?
+;                       (begin
+;                         (eopl:printf "enter procedure: ~a = ~a\n" vars vals)
+;                         (eopl:printf "~a\nexist procedure.\n" value)
+;                         value)
+;                       value))))))
+
+;; procedure without environment and corresponding apply-procedure 
 (define-datatype proc proc?
   (procedure
    (var (list-of identifier?))
    (body expression?)
-   (saved-env? environment?)))
+   ;(saved-env? environment?)
+   (trace? boolean?)))
 
 (define apply-procedure
-  (lambda (proc1 vals)
+  (lambda (proc1 vals env)
     (cases proc proc1
-      (procedure (vars body saved-env)
-        (value-of body (extend-env* vars vals saved-env))))))
+      (procedure (vars body trace?)
+                 (let ((value (value-of body (extend-env* vars vals env))))
+                   (if trace?
+                       (begin
+                         (eopl:printf "enter procedure: ~a = ~a\n" vars vals)
+                         (eopl:printf "~a\nexist procedure.\n" value)
+                         value)
+                       value))))))
 
 ; ------------------------------------------------------------------------------
 ; Expressed values
@@ -213,24 +243,24 @@
   (lambda (val)
     (cases expval val
       (num-val (num)
-        num)
+               num)
       (bool-val (bool)
-        bool)
+                bool)
       (emptylist-val ()
-        '())
+                     '())
       (cons-val (first rest)
-        (cons (expval->sexp first) (expval->sexp rest)))
+                (cons (expval->sexp first) (expval->sexp rest)))
       (proc-val (proc1)
-         "<<procedure>>"))))
+                "<<procedure>>"))))
 
 ; ------------------------------------------------------------------------------
 ; Init environment
 (define init-env
   (lambda ()
     (extend-env 'i (num-val 1)
-      (extend-env 'v (num-val 5)
-        (extend-env 'x (num-val 10)
-          (empty-env))))))
+                (extend-env 'v (num-val 5)
+                            (extend-env 'x (num-val 10)
+                                        (empty-env))))))
 
 ; ------------------------------------------------------------------------------
 ; Interpreter
@@ -243,61 +273,130 @@
   (lambda (pgm)
     (cases program pgm
       (a-program (exp1)
-        (value-of exp1 (init-env))))))
+                 (value-of exp1 (init-env))))))
 
 (define value-of
   (lambda (exp env)
     (cases expression exp
       (const-exp (num) (num-val num))
       (nullary-exp (op)
-        ((nullary-table op)))
+                   ((nullary-table op)))
       (unary-exp (op exp1)
-        (let ((val1 (value-of exp1 env)))
-          ((unary-table op) val1)))
+                 (let ((val1 (value-of exp1 env)))
+                   ((unary-table op) val1)))
       (binary-exp (op exp1 exp2)
-        (let ((val1 (value-of exp1 env))
-              (val2 (value-of exp2 env)))
-          ((binary-table op) val1 val2)))
+                  (let ((val1 (value-of exp1 env))
+                        (val2 (value-of exp2 env)))
+                    ((binary-table op) val1 val2)))
       (n-ary-exp (op exprs)
-        (let ((vals (map (lambda (expr) (value-of expr env)) exprs)))
-          ((n-ary-table op) vals)))
+                 (let ((vals (map (lambda (expr) (value-of expr env)) exprs)))
+                   ((n-ary-table op) vals)))
       (if-exp (exp1 exp2 exp3)
-        (let ((val1 (value-of exp1 env)))
-          (if (expval->bool val1)
-              (value-of exp2 env)
-              (value-of exp3 env))))
+              (let ((val1 (value-of exp1 env)))
+                (if (expval->bool val1)
+                    (value-of exp2 env)
+                    (value-of exp3 env))))
       (cond-exp (lhss rhss)
-        (value-of-cond lhss rhss env))
+                (value-of-cond lhss rhss env))
       (var-exp (var)
-        (apply-env env var))
+               (apply-env env var))
       (let-exp (var exp1 body)
-        (let ((val1 (value-of exp1 env)))
-          (value-of body (extend-env var val1 env))))
+               (let ((val1 (value-of exp1 env)))
+                 (value-of body (extend-env var val1 env))))
       (let*-exp (vars exprs body)
-        (value-of body (foldl-2 extend-with-value-of env vars exprs)))
+                (value-of body (foldl-2 extend-with-value-of env vars exprs)))
       (unpack-exp (vars expr body)
-        (let ((val (value-of expr env)))
-          (value-of body (extend-env* vars (expval->list val) env))))
+                  (let ((val (value-of expr env)))
+                    (value-of body (extend-env* vars (expval->list val) env))))
       (proc-exp (vars body)
-        (proc-val (procedure vars body env)))
+                (let ((frees (free-variables body '())))
+                  (proc-val (procedure vars body #f))))
+      (traceproc-exp (vars body)
+                     (let ((frees (free-variables body '())))
+                       (proc-val (procedure vars body #t))))
       (letproc-exp (name vars proc-body exp-body)
-        (let ((p-val (proc-val (procedure vars proc-body env))))
-          (value-of exp-body (extend-env name p-val env))))
+                   (let ((p-val (proc-val (procedure vars proc-body #f))))
+                     (value-of exp-body (extend-env name p-val env))))
       (call-exp (rator rands)
-        (let ((proc (expval->proc (value-of rator env)))
-              (args (value-of* rands env)))
-          (apply-procedure proc args))))))
+                (let ((proc (expval->proc (value-of rator env)))
+                      (args (value-of* rands env)))
+                  (apply-procedure proc args env))))))
 
+(define free-variables
+  (lambda (expr bound)
+    (cases expression expr
+      (const-exp (num) '())
+      (nullary-exp (op) '())
+      (unary-exp (op exp1)
+                 (free-variables exp1 bound))
+      (binary-exp (op exp1 exp2)
+                  (append (free-variables exp1 bound)
+                          (free-variables exp2 bound)))
+      (n-ary-exp (op exprs)
+                 (append (flatten (map free-variables exprs))))
+      (var-exp (var)
+               (if (memq var bound)
+                   '()
+                   (list var)))
+      (if-exp (pred consq alte)
+              (append (free-variables pred bound)
+                      (free-variables consq bound)
+                      (free-variables alte bound)))
+      (cond-exp (lhss rhss)
+                (append (free-variables lhss bound)
+                        (free-variables rhss bound)))
+      (let-exp (var value body)
+               (append (free-variables value bound)
+                       (free-variables body (cons var bound))))
+      (let*-exp (vars exprs body)
+                (flatten (map (lambda (var)
+                                (free-variables var bound))
+                              vars)))
+      (unpack-exp (vars expr body)
+                  (flatten (map (lambda (var)
+                                  (free-variables var bound))
+                                vars)))
+      (proc-exp (var body)
+                (append (free-variables body (cons var bound))))
+      (traceproc-exp (var body)
+                     (append (free-variables body (cons var bound))))
+      (letproc-exp (name vars proc-body exp-body)
+                   (flatten (map (lambda (var)
+                                   (free-variables var bound))
+                                 vars)))
+      (call-exp (rator rands)
+                (append (free-variables rator bound)
+                        (flatten (map (lambda (var)
+                                        (free-variables var bound))
+                                      rands)))))))
+
+(define optimize-env
+  (lambda (env frees)
+    (let ((pred (lambda(var)
+                  (if (or (null? var)
+                          (memq (car var) frees))
+                      #t
+                      #f))))
+      (filter pred env))))
+
+(define filter
+  (lambda (pred lst)
+    (cond
+      ((null? lst) '())
+      ((pred (car lst)) (cons (car lst)
+                              (filter pred (cdr lst))))
+      (else (filter pred (cdr lst))))))
+                      
 (define value-of*
   (lambda (exps env)
     (letrec ((value-of*-helper (lambda (exps env init)
-                              (cond
-                                ((null? exps) init)
-                                (else
-                                 (value-of*-helper (cdr exps)
-                                                   env
-                                                   (cons (value-of (car exps) env)
-                                                         init)))))))
+                                 (cond
+                                   ((null? exps) init)
+                                   (else
+                                    (value-of*-helper (cdr exps)
+                                                      env
+                                                      (cons (value-of (car exps) env)
+                                                            init)))))))
       (value-of*-helper exps env empty))))
 
 (define value-of-cond
@@ -400,7 +499,7 @@
 
 (define read-eval-print
   (sllgen:make-rep-loop "-->" value-of-program
-    (sllgen:make-stream-parser scanner-spec grammar)))
+                        (sllgen:make-stream-parser scanner-spec grammar)))
 
 ;; test
 ;(run "let makemult = proc (maker)
@@ -475,6 +574,28 @@
 ;
 ;(run "let f = proc (x) -(x,11)
 ;      in (f (f 77))")
+;(run "let f = traceproc (x) -(x,11)
+;      in (f 77)")
 ;
-(run "(proc (f) (f (f 77))
-       proc (x) -(x,11))")
+;(run "let f = traceproc (x) -(x,11)
+;      in (f (f 77))")
+;
+;(run "(proc (f) (f (f 77))
+;       proc (x) -(x,11))")
+
+(run "let a = 3
+      in let* p = proc (x) -(x,a)
+             a = 5 
+         in -(a,(p 2))")
+
+(run "let a = 3
+      in let p = proc (z) a
+         in let f = proc (x) (p 0)
+            in let a = 5
+               in (f 2)")
+
+(run "let a = 3
+      in let p = proc (z) a
+         in let f = proc (a) (p 0)
+            in let a = 5
+               in (f 2)")
