@@ -348,7 +348,7 @@
 
 (run "let x = 10
        in let x = 20
-       in +(x, 10)")
+          in +(x, 10)")
 
 (run "let x = 30
       in let x = -(x,1)
